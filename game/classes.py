@@ -1,7 +1,7 @@
 import pygame
 import os
 import math
-
+import data_handler as dh
 
 class MainScreen:
     def __init__(self, settings_dict):
@@ -17,15 +17,25 @@ class MainScreen:
         else:
             self.screen = pygame.display.set_mode(self.resolution)
 
+    def draw_screen(self, player, enemy_list, player_projectiles, enemy_projectiles):
+        self.screen.blit(player.image, (player.x, player.y))
+        for bullet in player_projectiles:
+            pygame.draw.rect(self.screen, (255, 0, 0), bullet.hitbox)
+        for bullet in enemy_projectiles:
+            pygame.draw.circle(self.screen, (255, 20, 157),
+                               (bullet.x + (bullet.width / 2), bullet.y + (bullet.height / 2)),
+                               bullet.width / 2)
+        for enemy in enemy_list:
+            self.surface.blit(enemy.image, (enemy.x, enemy.y))
+        pygame.draw.rect(self.surface, (0, 0, 0), pygame.Rect(10, 10, 140, 40))
+        pygame.draw.rect(self.surface, (255, 0, 0), pygame.Rect(14, 14, (132 * (player.health / 100)), 32))
+        pygame.display.update()
 
 
 class Player:
-
     def __init__(self, surface, fps, image, width, height, x, y, x_velocity, y_velocity, health, immunity_delay):
         self.surface = surface
         self.fps = fps
-        self.image = pygame.transform.scale(pygame.image.load(os.path.join("Assets", image + ".png")).convert_alpha(),
-                                            (width, height))
         self.width = width
         self.height = height
         self.x = x
@@ -36,6 +46,7 @@ class Player:
         self.hitbox = pygame.Rect(x, y, self.width, self.height)
         self.immunity_delay = immunity_delay
         self.immunity_delay_remaining = immunity_delay
+        self.image = dh.get_image(image, (self.width, self.height))
 
     def set_xy(self, x, y):
         self.x = x
@@ -57,12 +68,12 @@ class Player:
         if keys_pressed[pygame.K_a] and self.x - self.x_velocity > 0:  # LEFT
             self.x -= self.x_velocity
         if keys_pressed[pygame.K_d] and self.x + self.width + self.x_velocity < pygame.display.get_window_size()[
-            0]:  # RIGHT
+                0]:  # RIGHT
             self.x += self.x_velocity
         if keys_pressed[pygame.K_w] and self.y - self.y_velocity > 0:  # UP
             self.y -= self.y_velocity
         if keys_pressed[pygame.K_s] and self.y + self.height + self.y_velocity < pygame.display.get_window_size()[
-            1]:  # DOWN
+                1]:  # DOWN
             self.y += self.y_velocity
         self.move_hitbox(self.x, self.y)
 
@@ -71,19 +82,15 @@ class Player:
             if keys_pressed[pygame.K_SPACE]:
                 projectile = Projectile(self.surface, self.x + (self.width / 2), self.y - (self.height / 10), 5, 10,
                                         (255, 0, 0), 0,
-                                        6, self.fps)
+                                        6, self.fps, 1)
                 player_projectiles_primary.append(projectile)
-                if not primary_firing_channel.get_busy():
-                    primary_firing_channel.play(primary_firing_sound)
                 pass
         else:
             if keys_pressed[pygame.K_SPACE] and 100 < self.y - player_projectiles_primary[-1].y:
                 projectile = Projectile(self.surface, self.x + (self.width / 2), self.y - (self.height / 10), 5, 10,
                                         (255, 0, 0), 0,
-                                        6, self.fps)
+                                        6, self.fps, 1)
                 player_projectiles_primary.append(projectile)
-                if not primary_firing_channel.get_busy():
-                    primary_firing_channel.play(primary_firing_sound)
         return player_projectiles_primary
 
     def reset_immunity_delay(self):
@@ -218,14 +225,14 @@ class Enemy:
     def fire_projectile_primary(self, enemy_projectiles_primary):
         if self.x % (pygame.display.get_window_size()[0] / 10) == 0:
             projectile = Projectile(self.surface, self.x + (self.width / 2), self.y, 10, 10, (255, 20, 147), 0,
-                                    10, self.fps)
+                                    10, self.fps, 1)
             enemy_projectiles_primary.append(projectile)
         return enemy_projectiles_primary
 
     def fire_projectile_tracking(self, enemy_projectiles_primary, target):
         if self.y % (pygame.display.get_window_size()[1] / 5) == 0:
             projectile = TrackingProjectile(self.surface, self.x + (self.width / 2), self.y, 10, 10,
-                                            (255, 20, 147), 10, 10, target, 240, self.fps)
+                                            (255, 20, 147), 10, 10, target, 240, self.fps, 1)
             enemy_projectiles_primary.append(projectile)
         return enemy_projectiles_primary
 
@@ -270,8 +277,8 @@ class Projectile:
 
 class TrackingProjectile(Projectile):
     def __init__(self, surface, x, y, width, height, colour, x_velocity, y_velocity, target_object,
-                 tracking_duration, fps):
-        Projectile.__init__(self, surface, x, y, width, height, colour, x_velocity, y_velocity, fps)
+                 tracking_duration, fps, damage):
+        Projectile.__init__(self, surface, x, y, width, height, colour, x_velocity, y_velocity, fps, damage)
         self.target = (target_object.x, target_object.y)
         self.tracking_duration = tracking_duration
 
@@ -388,7 +395,7 @@ class PodHandler:
         self.complete = False
 
 
-class CollisionHandler:
+class StateHandler:
     def __init__(self, player, enemy_list, player_projectiles, enemy_projectiles, surface):
         self.player = player
         self.enemy_list = enemy_list
@@ -409,6 +416,16 @@ class CollisionHandler:
             return False
         else:
             return True
+
+    def move_entities(self):
+        for bullet in self.player_projectiles:
+            bullet.set_y(bullet.y + bullet.y_velocity)
+            bullet.move_hitbox(bullet.x, bullet.y)
+        for bullet in self.enemy_projectiles:
+            bullet.move(self.player)
+        for enemy in self.enemy_list:
+            if not enemy.move():
+                self.enemy_list.remove(enemy)
 
     def check_enemy_collisions(self):
         for enemy in self.enemy_list:
