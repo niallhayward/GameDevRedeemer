@@ -1,7 +1,7 @@
 import json
 import pygame
 import os
-pygame.init()
+
 
 def write_to_json(new_dict, file_name):
     with open(os.path.join(
@@ -40,23 +40,16 @@ def get_music(file_name, file_type):
                      file_name + "." + file_type)))
 
 
-# total_enemies = []
-# for level in enemy_dict.keys():
-#     level_enemies = []
-#     for pod in enemy_dict[level].keys():
-#         new_enemies = []
-#         pod_index = len(enemy_dict[level][pod])
-#         while pod_index > 0:
-#             for enemy in enemy_dict[level][pod]:
-#                 enemy_index = len(enemy)
-#                 new_enemy = [screen]
-#                 while enemy_index > 0:
-#                     for attribute in enemy:
-#                         new_enemy.append(attribute)
-#                         enemy_index -= 1
-#                 new_enemies.append(Enemy(*new_enemy))
-#                 pod_index -= 1
-#         level_enemies.append(new_enemies)
-#     total_enemies.append(level_enemies)
-# return total_enemies
-get_music("level1", "mp3")
+def convert_dict_to_list(new_dict):  # THIS DOES NOT WORK BEYOND TWO NESTED DICTS
+    total_enemies = []
+    for key in new_dict.keys():
+        total_enemies.append(new_dict[key])
+    for element in total_enemies:
+        if type(element) is dict:
+            new_list = []
+            for key in element.keys():
+                new_list.append(element[key])
+            total_enemies.append(new_list)
+            total_enemies.remove(element)
+    return total_enemies
+
