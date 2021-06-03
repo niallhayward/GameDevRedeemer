@@ -3,6 +3,46 @@ import os
 import math
 import data_handler as dh
 
+
+class Game:
+    def __init__(self, screen, settings, level, background, background_extras, player, enemies, player_projectiles, enemy_projectiles):
+        self.screen = screen
+        self.settings = settings
+        self.level = level
+        self.stage = 0
+        self.background = background
+        self.background_extras = background_extras
+        self.player = player
+        self.enemies = enemies
+        self.player_projectiles = player_projectiles
+        self.enemy_projectiles = enemy_projectiles
+        self.pod = EnemyPod(self.fps, Enemy(*self.enemies[str(self.level)][str(self.stage)]), 3, 5)
+
+    def render(self):
+        self.background.scroll_background()
+        for enemy in self.enemies:  fps, enemy, delay, size)
+            self.screen.blit(enemy.image, (enemy.x, enemy.y))
+        self.screen.blit(self.player.image, (self.player.x, self.player.y))  # Render player from player object
+        for projectile in self.player_projectiles:  # Render player projectile objects from list
+            self.screen.blit(projectile.image, (projectile.x, projectile.y))
+        for projectile in self.enemy_projectiles:  # Render player projectile objects from list
+            self.screen.blit(projectile.image, (projectile.x, projectile.y))
+
+    def update(self):
+        if self.pod.size > 0:
+        if not self.enemies[str(self.level)][str(self.stage)]:
+            self.stage += 1
+        for enemy in self.enemies[str(self.level)][str(self.stage)]:
+            if not enemy.move():
+                self.enemies.remove(enemy)
+        for projectile in self.player_projectiles:
+            projectile.move()
+        raise NotImplementedError
+
+    def handle_events(self):
+        raise NotImplementedError
+
+
 class MainScreen:
     def __init__(self, settings_dict):
         self.resolution = tuple(settings_dict["Resolution"])
@@ -17,7 +57,13 @@ class MainScreen:
         else:
             self.screen = pygame.display.set_mode(self.resolution)
 
-    def draw_screen(self, player, enemy_list, player_projectiles, enemy_projectiles):
+    def draw_screen_menu(self, background_handler):
+        for background in background_handler.background_list:
+            self.screen.blit(background.image, (background.x, background.y))
+
+    def draw_screen_game(self, player, enemy_list, player_projectiles, enemy_projectiles, background_handler):
+        for background in background_handler.background_list:
+            self.screen.blit(background.image, (background.x, background.y))
         self.screen.blit(player.image, (player.x, player.y))
         for bullet in player_projectiles:
             pygame.draw.rect(self.screen, (255, 0, 0), bullet.hitbox)
@@ -26,10 +72,18 @@ class MainScreen:
                                (bullet.x + (bullet.width / 2), bullet.y + (bullet.height / 2)),
                                bullet.width / 2)
         for enemy in enemy_list:
-            self.surface.blit(enemy.image, (enemy.x, enemy.y))
-        pygame.draw.rect(self.surface, (0, 0, 0), pygame.Rect(10, 10, 140, 40))
-        pygame.draw.rect(self.surface, (255, 0, 0), pygame.Rect(14, 14, (132 * (player.health / 100)), 32))
-        pygame.display.update()
+            self.screen.blit(enemy.image, (enemy.x, enemy.y))
+        pygame.draw.rect(self.screen, (0, 0, 0), pygame.Rect(10, 10, 140, 40))
+        pygame.draw.rect(self.screen, (255, 0, 0), pygame.Rect(14, 14, (132 * (player.health / 100)), 32))
+
+    def draw_text(self, text, font, colour, x, y, centred):
+        textobj = font.render(text, 1, colour)
+        textrect = textobj.get_rect()
+        if centred:
+            x -= textrect.width // 2
+        textrect.topleft = (x, y)
+        self.screen.blit(textobj, textrect)
+        return textrect
 
 
 class Player:
@@ -46,7 +100,7 @@ class Player:
         self.hitbox = pygame.Rect(x, y, self.width, self.height)
         self.immunity_delay = immunity_delay
         self.immunity_delay_remaining = immunity_delay
-        self.image = dh.get_image(image, (self.width, self.height))
+        self.image = dh.get_image(image, self.width, self.height)
 
     def set_xy(self, x, y):
         self.x = x
@@ -97,220 +151,12 @@ class Player:
         self.immunity_delay_remaining = self.immunity_delay
 
 
-class Enemy:
-
-    def __init__(self, surface, fps, name, health, x, y, x_velocity, y_velocity, width, height, rotation, move_type,
-                 attack_type):
-        self.surface = surface
-        self.fps = fps
-        self.name = name
-        self.health = health
-        self.x = x
-        self.y = y
-        self.ori_x = x
-        self.ori_y = y
-        self.x_velocity = x_velocity
-        self.y_velocity = y_velocity
-        self.width = width
-        self.height = height
-        self.hitbox = pygame.Rect(x, y, width, height)
-        self.value = health * 100
-        self.move_type = move_type
-        self.attack_type = attack_type
-        self.image = pygame.transform.rotate(
-            pygame.transform.scale(pygame.image.load(os.path.join("Assets", name)).convert_alpha(),
-                                   (width, height)), rotation)
-
-    def move_hitbox(self, x, y):
-        self.hitbox = pygame.Rect(x, y, self.width, self.height)
-
-    def debug_hitbox(self):
-        pygame.draw.rect(self.surface, (255, 0, 0), self.hitbox)
-
-    def move_linear(self):
-        self.x += self.x_velocity
-        self.y += self.y_velocity
-        self.move_hitbox(self.x, self.y)
-
-    def move_up_or_down_line(self, direction):
-        if direction == "Down":
-            self.y += self.y_velocity
-        if direction == "Up":
-            self.y -= self.y_velocity
-        self.move_hitbox(self.x, self.y)
-
-    def move_up_or_down_wave(self, direction, wave_range):
-        boundary_left = self.ori_x
-        boundary_right = self.ori_x + wave_range
-        if direction == "Down":
-            self.y += self.y_velocity
-        if direction == "Up":
-            self.y -= self.y_velocity
-        self.x = (((math.sin(self.y / 50) + 1) * (boundary_right - boundary_left) / 2) + boundary_left)
-        self.move_hitbox(self.x, self.y)
-
-    def move_side_to_side_wave(self, wave_range):
-        boundary_top = self.ori_y
-        boundary_bottom = self.ori_y + wave_range
-        if self.ori_x <= 0:
-            self.x += self.x_velocity
-        if self.ori_x > pygame.display.get_window_size()[0]:
-            self.x -= self.x_velocity
-        self.y = (((math.sin(self.x / 50) + 1) * (boundary_bottom - boundary_top) / 2) + boundary_top)
-        self.move_hitbox(self.x, self.y)
-
-    def move_boss(self):
-        if self.y < 10:
-            self.y += self.y_velocity
-        else:
-            if self.x < 10:
-                self.x_velocity = -self.x_velocity
-            if self.x > (pygame.display.get_window_size()[0] - (self.width + 10)):
-                self.x_velocity = - self.x_velocity
-            self.x += self.x_velocity
-        self.move_hitbox(self.x, self.y)
-
-    def move(self):
-        if self.move_type == "Linear":
-            self.move_linear()
-            if self.x_velocity >= 0 and self.x > pygame.display.get_window_size()[0]:
-                return False
-            if self.x_velocity <= 0 and self.x < 0:
-                return False
-            if self.y_velocity >= 0 and self.y > pygame.display.get_window_size()[1]:
-                return False
-            if self.y_velocity <= 0 and self.y < 0:
-                return False
-            return True
-        if self.move_type == "Down Line":
-            self.move_up_or_down_line("Down")
-            if self.y > pygame.display.get_window_size()[1]:
-                return False
-            else:
-                return True
-        if self.move_type == "Up Line":
-            self.move_up_or_down_line("Up")
-            if self.y + self.height < 0:
-                return False
-            else:
-                return True
-        if self.move_type == "Down Wave":
-            self.move_up_or_down_wave("Down", pygame.display.get_window_size()[0] / 2)
-            if self.y > pygame.display.get_window_size()[1]:
-                return False
-            else:
-                return True
-        if self.move_type == "Up Wave":
-            self.move_up_or_down_wave("Up", pygame.display.get_window_size()[0] / 2)
-            if self.y + self.height < 0:
-                return False
-            else:
-                return True
-        if self.move_type == "Right Wave":
-            self.move_side_to_side_wave(pygame.display.get_window_size()[1] / 4)
-            if self.x > pygame.display.get_window_size()[0]:
-                return False
-            else:
-                return True
-        if self.move_type == "Left Wave":
-            self.move_side_to_side_wave(pygame.display.get_window_size()[1] / 4)
-            if self.x + self.width < 0:
-                return False
-            else:
-                return True
-        if self.move_type == "First Boss":
-            self.move_boss()
-            return True
-
-    def fire_projectile_primary(self, enemy_projectiles_primary):
-        if self.x % (pygame.display.get_window_size()[0] / 10) == 0:
-            projectile = Projectile(self.surface, self.x + (self.width / 2), self.y, 10, 10, (255, 20, 147), 0,
-                                    10, self.fps, 1)
-            enemy_projectiles_primary.append(projectile)
-        return enemy_projectiles_primary
-
-    def fire_projectile_tracking(self, enemy_projectiles_primary, target):
-        if self.y % (pygame.display.get_window_size()[1] / 5) == 0:
-            projectile = TrackingProjectile(self.surface, self.x + (self.width / 2), self.y, 10, 10,
-                                            (255, 20, 147), 10, 10, target, 240, self.fps, 1)
-            enemy_projectiles_primary.append(projectile)
-        return enemy_projectiles_primary
-
-
-class Projectile:
-    def __init__(self, surface, x, y, width, height, colour, x_velocity, y_velocity, fps, damage):
-        self.surface = surface
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.colour = colour
-        self.x_velocity = x_velocity
-        self.y_velocity = y_velocity
-        self.hitbox = pygame.Rect(x, y, width, height)
-        self.image = pygame.draw.rect(surface, colour, self.hitbox)
-        self.last_x = 0
-        self.last_y = 0
-        self.x_accel = x_velocity
-        self.y_accel = y_velocity
-        self.fps = fps
-        self.damage = damage
-
-    def set_xy(self, x, y):
-        self.x = x
-        self.y = y
-
-    def set_x(self, x):
-        self.x = x
-
-    def set_y(self, y):
-        self.y = y
-
-    def move_hitbox(self, x, y):
-        self.hitbox = pygame.Rect(x, y, self.width, self.height)
-
-    def move(self, target):
-        self.x += self.x_accel
-        self.y += self.y_accel
-        self.move_hitbox(self.x, self.y)
-
-
-class TrackingProjectile(Projectile):
-    def __init__(self, surface, x, y, width, height, colour, x_velocity, y_velocity, target_object,
-                 tracking_duration, fps, damage):
-        Projectile.__init__(self, surface, x, y, width, height, colour, x_velocity, y_velocity, fps, damage)
-        self.target = (target_object.x, target_object.y)
-        self.tracking_duration = tracking_duration
-
-    def set_duration(self, duration):
-        self.tracking_duration = duration
-
-    def move(self, target):
-        if self.tracking_duration <= 0:
-            self.x += self.x_accel
-            self.y += self.y_accel
-        else:
-            distance = (target.x - self.x, target.y - self.y)
-            self.x += (distance[0] / (self.fps / (self.x_velocity / 16)))
-            self.y += (distance[1] / (self.fps / (self.y_velocity / 16)))
-            if self.tracking_duration == 10:
-                self.last_x = self.x
-                self.last_y = self.y
-            if self.tracking_duration == 2:
-                self.x_accel = (self.x - self.last_x) / 8
-                self.y_accel = (self.y - self.last_y) / 8
-        self.move_hitbox(self.x, self.y)
-        self.set_duration(self.tracking_duration - 1)
-
-
 class Background:
-    def __init__(self, surface, fps, image, x, y, x_velocity, y_velocity, width, height, level):
+    def __init__(self, surface, fps, image, x, y, x_velocity, y_velocity, resolution, level):
         self.surface = surface
         self.fps = fps
-        self.image = pygame.transform.scale(pygame.image.load(os.path.join("Assets", image + ".png")).convert_alpha(),
-                                            (width, height))
-        self.width = width
-        self.height = height
+        self.width = resolution[0]
+        self.height = resolution[1]
         self.x = x
         self.y = y
         self.ori_x = x
@@ -320,6 +166,8 @@ class Background:
         self.level = level
         self.rel_x = x % pygame.display.get_window_size()[1]
         self.rel_y = y % pygame.display.get_window_size()[1]
+        self.image = dh.get_image(image, self.width, self.height)
+
         if self.x_velocity == 0:
             self.time_x = False
         else:
@@ -341,23 +189,23 @@ class Background:
     def set_rel_y(self, y):
         self.rel_y = y % self.height
 
-    def scroll_background(self, direction):
-        if direction == "Down":
+    def scroll_background(self):
+        if self.y_velocity > 0:
             self.surface.blit(self.image, (0, self.rel_y - self.height))
             if self.rel_y < pygame.display.get_window_size()[1]:
                 self.surface.blit(self.image, (0, self.rel_y))
             self.set_y(self.y + self.y_velocity)
-        if direction == "Up":
+        if self.y_velocity < 0:
             self.surface.blit(self.image, (0, self.rel_y - self.height))
             if self.rel_y < pygame.display.get_window_size()[1]:
                 self.surface.blit(self.image, (0, self.rel_y))
             self.set_y(self.y - self.y_velocity)
-        if direction == "Left":
+        if self.x_velocity < 0:
             self.surface.blit(self.image, (self.rel_x - self.width, 0))
             if self.rel_x < pygame.display.get_window_size()[0]:
                 self.surface.blit(self.image, (self.rel_x, 0))
             self.set_x(self.x - self.x_velocity)
-        if direction == "Right":
+        if self.x_velocity > 0:
             self.surface.blit(self.image, (self.rel_x - self.width, 0))
             if self.rel_x < pygame.display.get_window_size()[0]:
                 self.surface.blit(self.image, (self.rel_x, 0))
@@ -385,6 +233,16 @@ class Background:
                     0 - abs(self.ori_y) - (pygame.display.get_window_size()[1] * (delay / self.time_y))):
                 self.set_x(self.ori_x)
                 self.set_y(self.ori_y)
+
+
+class BackgroundHandler:
+    def __init__(self, background_list, background_objects):
+        self.background_list = background_list
+        self.background_objects = background_objects
+
+    def move_backgrounds(self):
+        for background in self.background_list:
+            background.scroll_background()
 
 
 class PodHandler:
@@ -459,27 +317,4 @@ class StateHandler:
         self.check_enemy_collisions()
         return self.player, self.enemy_list, self.player_projectiles, self.enemy_projectiles
 
-# class HitboxDebugger:
-#     def __init__(self, player, enemy):
-#         self.player = player
-#         self.enemy = enemy
-#
-#     def get_player(self):
-#         return self.player
-#
-#     def set_player(self, new_bool):
-#         self.player = new_bool
-#
-#     def get_enemy(self):
-#         return self.enemy
-#
-#     def set_enemy(self, new_bool):
-#         self.enemy = new_bool
-#
-#     def enable_debug(self):
-#         self.set_player(True)
-#         self.set_enemy(True)
-#
-#     def disable_debug(self):
-#         self.set_player(False)
-#         self.set_enemy(False)
+

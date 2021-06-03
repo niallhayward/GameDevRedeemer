@@ -1,7 +1,7 @@
 import json
 import pygame
 import os
-
+import classes
 
 def write_to_json(new_dict, file_name):
     with open(os.path.join(
@@ -19,11 +19,11 @@ def get_dict(file_name):
     return new_dict
 
 
-def get_image(file_name, width, height):
+def get_image(file_name, size):
     image = pygame.transform.scale(pygame.image.load(os.path.abspath(
         os.path.join(os.path.join((os.path.join(os.getcwd(), os.pardir, "data")), "images"),
                      file_name + '.png'))).convert_alpha(),
-                                   (width, height))
+                                   size)
     return image
 
 
@@ -35,21 +35,25 @@ def get_sound(file_name, file_type):
 
 
 def get_music(file_name, file_type):
-    return pygame.mixer.music.load(os.path.abspath(
+    music = os.path.abspath(
         os.path.join(os.path.join((os.path.join(os.getcwd(), os.pardir, "data")), "music"),
-                     file_name + "." + file_type)))
+                     file_name + "." + file_type))
+    return music
 
 
-def convert_dict_to_list(new_dict):  # THIS DOES NOT WORK BEYOND TWO NESTED DICTS
-    total_enemies = []
+def create_enemy_pods(new_dict):  # THIS DOES NOT WORK BEYOND TWO NESTED DICTS
+    all_enemy_pods = []
     for key in new_dict.keys():
-        total_enemies.append(new_dict[key])
-    for element in total_enemies:
+        all_enemy_pods.append(new_dict[key])
+    for element in all_enemy_pods:
         if type(element) is dict:
             new_list = []
             for key in element.keys():
                 new_list.append(element[key])
-            total_enemies.append(new_list)
-            total_enemies.remove(element)
-    return total_enemies
+            print(new_list)
+            all_enemy_pods.append(new_list)
+            all_enemy_pods.remove(element)
+    return all_enemy_pods
 
+
+create_enemy_pods(get_dict("enemies"))
