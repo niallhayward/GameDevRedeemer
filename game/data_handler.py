@@ -1,7 +1,7 @@
 import json
-import pygame
 import os
-import classes
+import pygame
+
 
 def write_to_json(new_dict, file_name):
     with open(os.path.join(
@@ -50,10 +50,6 @@ def create_enemy_pods(new_dict):  # THIS DOES NOT WORK BEYOND TWO NESTED DICTS
             new_list = []
             for key in element.keys():
                 new_list.append(element[key])
-            print(new_list)
             all_enemy_pods.append(new_list)
             all_enemy_pods.remove(element)
     return all_enemy_pods
-
-
-create_enemy_pods(get_dict("enemies"))
